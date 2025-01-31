@@ -1,0 +1,488 @@
+﻿@page "/map"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IJSRuntime JSRuntime
+@inject ICarparkService CarparkService
+@inject NavigationManager NavigationManager
+@inject ILogger<Map> Logger
+
+<PageTitle>Map</PageTitle>
+
+<style>
+    .user-location-marker {
+        background: transparent;
+        border: none;
+    }
+
+    .user-dot {
+        width: 12px;
+        height: 12px;
+        background-color: #2196F3;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #2196F3;
+    }
+
+    .carpark-marker {
+        background: transparent;
+        border: none;
+    }
+
+    .carpark-dot {
+        width: 10px;
+        height: 10px;
+        background-color: #F44336;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #F44336;
+    }
+</style>
+
+<div style="height: 90vh;" class="d-flex justify-center flex-column flex-sm-row flex-grow-1 gap-2">
+    <div id="map" style="height: 100%; width: 100%;"></div>
+    @if (selectedCarpark != null && showCard)
+    {
+        <MudCard Style="position: absolute; width: 300px; z-index: 1000; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+            <MudCardContent>
+                <MudText Typo="Typo.h6">@selectedCarpark.CarparkId</MudText>
+                <MudText>Address: @selectedCarpark.Address</MudText>
+                
+                @if (selectedCarpark.LotsAvailable.HasValue && selectedCarpark.TotalLots.HasValue)
+                {
+                    <MudText>Available Lots: @selectedCarpark.LotsAvailable / @selectedCarpark.TotalLots</MudText>
+                }
+                
+                <MudDivider Class="my-2"/>
+                
+                <MudText>Type: @selectedCarpark.Type</MudText>
+                <MudText>System: @selectedCarpark.SystemType</MudText>
+                <MudText>Parking Type: @selectedCarpark.ShortTermParkingType</MudText>
+                
+                <MudDivider Class="my-2"/>
+                
+                <MudStack>
+                    <div class="d-flex align-center gap-2">
+                        <MudText>Free Parking: @selectedCarpark.FreeParking</MudText>
+                    </div>
+                    
+                    <div class="d-flex align-center gap-2">
+                        <MudText>Night Parking: @(selectedCarpark.NightParking ? "Available" : "Not Available")</MudText>
+                    </div>
+                    
+                    @if (selectedCarpark.GantryHeight > 0)
+                    {
+                        <div class="d-flex align-center gap-2">
+                            <MudText>Height Limit: @selectedCarpark.GantryHeight m</MudText>
+                        </div>
+                    }
+                    
+                    @if (selectedCarpark.CarparkBasement)
+                    {
+                        <div class="d-flex align-center gap-2">
+                            <MudText>Basement Parking</MudText>
+                        </div>
+                    }
+                    
+                    @if (selectedCarpark.CentralCharge)
+                    {
+                        <div class="d-flex align-center gap-2">
+                            <MudText>Central Charging</MudText>
+                        </div>
+                    }
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton OnClick="@(() => showCard = false)">Close</MudButton>
+                <MudButton OnClick="@(() => UpdateTo(selectedCarpark))">Navigate</MudButton>
+                <MudButton OnClick="@(() => NavigateToYourUrl(selectedCarpark))">Book</MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+
+    <MudPaper Height="100%" Elevation="1" style="overflow-y: scroll;">
+        <div class="d-flex justify-center align-center flex-column gap-2">
+            <MudAutocomplete T="Carpark" 
+                class="ml-4 mr-4 mt-4"
+                Variant="Variant.Outlined"
+                Label="To"
+                Value="To"
+                ValueChanged="@UpdateTo"
+                SearchFunc="@((value, token) => SearchCarparks(value))"
+                ToStringFunc="@(c => c?.CarparkId ?? "")"
+                Clearable="true"/>
+            
+            @if (userLocation.Instructions.Any())
+            {
+                <MudList T="RouteInstruction" Dense="true" Class="mx-4">
+                    <MudListItem Class="mt-4">
+                        <MudText Typo="Typo.h6">Total: @FormatDistance(userLocation.TotalDistance) • @FormatTime(userLocation.TotalTime)</MudText>
+                    </MudListItem>
+                    @foreach (var instruction in userLocation.Instructions.Select((item, index) => new { Item = item, Index = index }))
+                    {
+                        <MudListItem>
+                            <div class="d-flex flex-column">
+                                <MudText>@instruction.Item.Text</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @FormatDistance(instruction.Item.Distance) • @FormatTime(instruction.Item.Time)
+                                </MudText>
+                            </div>
+                        </MudListItem>
+                        <MudDivider Class="my-2"/>
+                    }
+                </MudList>
+            }
+        </div>
+    </MudPaper>
+</div>
+
+@code {
+    private DotNetObjectReference<Map>? dotNetHelper;
+    private IEnumerable<Carpark> Carparks = new List<Carpark>();
+    private Carpark To;
+    private Carpark? selectedCarpark;
+    private bool showCard = false;
+    private LocationResult userLocation = new() { Latitude = "1.3686323149474335", Longitude = "103.84452368184051" };
+    private const double SEARCH_RADIUS_KM = 2.0; // 2km radius
+
+    public class LocationResult
+    {
+        public required string Latitude { get; set; }
+        public required string Longitude { get; set; }
+        public IEnumerable<RouteInstruction> Instructions = new List<RouteInstruction>();
+        public double TotalDistance {get; set; }
+        public double TotalTime {get; set; }
+    }
+    public class RouteInstruction
+    {
+        public string Text { get; set; } = String.Empty;
+        public double Distance { get; set; }
+        public double Time { get; set; }
+    }
+    public void NavigateToYourUrl(Carpark carpark) {
+        NavigationManager.NavigateTo("/carparks/"+ carpark.CarparkId, true);
+    }
+    private async Task<IEnumerable<Carpark>> SearchCarparks(string value)
+    {
+        // Return all items when search string is empty
+        if (string.IsNullOrEmpty(value)) {
+            return await Task.FromResult(Carparks);
+        }
+        return Carparks.Where(x => x.CarparkId?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+    private async Task GetUserLocation()
+    {
+        try
+        {
+            var location = await JSRuntime.InvokeAsync<LocationResult>("getCurrentLocation");
+            if (location != null)
+            {
+                userLocation.Latitude = location.Latitude;
+                userLocation.Longitude = location.Longitude;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle errors (e.g., user denied permission)
+            Console.WriteLine($"Error getting location: {ex.Message}");
+        }
+    }
+    private async Task UpdateTo(Carpark carpark) {
+        if (carpark != null)
+        {
+            To = carpark;
+            // Update the map route
+           try 
+            {
+                // Use the updateRoute function which will trigger routesfound
+                await JSRuntime.InvokeVoidAsync(
+                    "mapFunctions.updateRoute",
+                    userLocation.Latitude,
+                    userLocation.Longitude,
+                    carpark.XCord,
+                    carpark.YCord
+                );
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error updating route: {ex.Message}");
+            }
+        }
+    }
+    private string FormatDistance(double distance)
+    {
+        if (distance >= 1000)
+        {
+            return $"{(distance / 1000):F1} km";
+        }
+        return $"{(int)distance} m";
+    }
+    private string FormatTime(double seconds)
+    {
+        var timeSpan = TimeSpan.FromSeconds(seconds);
+        if (timeSpan.TotalHours >= 1)
+        {
+            return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}min";
+        }
+        if (timeSpan.Minutes > 0)
+        {
+            return $"{timeSpan.Minutes}min";
+        }
+        return $"{timeSpan.Seconds}s";
+    }
+   
+   private double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
+    {
+        // Calculate distance using lat and lon
+        const double R = 6371;
+        var dLat = ToRad(lat2 - lat1);
+        var dLon = ToRad(lon2 - lon1);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(ToRad(lat1)) * Math.Cos(ToRad(lat2)) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return R * c * 1000;
+    }
+    private double ToRad(double degrees) => degrees * Math.PI / 180;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) {
+            dotNetHelper = DotNetObjectReference.Create(this);
+            Carparks = await CarparkService.GetAllCarparks();
+            await LoadScriptsAsync();
+            StateHasChanged();
+        }
+    }
+    private async Task LoadScriptsAsync()
+    {
+        try
+        {
+            // Load CSS files
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                if (!document.getElementById('leaflet-css')) {
+                    var link = document.createElement('link');
+                    link.id = 'leaflet-css';
+                    link.rel = 'stylesheet';
+                    link.href = 'js/leaflet/leaflet.css';
+                    document.head.appendChild(link);
+                }
+                if (!document.getElementById('routing-css')) {
+                    var link = document.createElement('link');
+                    link.id = 'routing-css';
+                    link.rel = 'stylesheet';
+                    link.href = 'js/leaflet-routing-machine-3.2.12/dist/leaflet-routing-machine.css';
+                    document.head.appendChild(link);
+                }
+            ");
+
+            // Load JavaScript files sequentially
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                function loadScript(url) {
+                    return new Promise((resolve, reject) => {
+                        if (document.querySelector(`script[src='${url}']`)) {
+                            resolve();
+                            return;
+                        }
+                        const script = document.createElement('script');
+                        script.src = url;
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.body.appendChild(script);
+                    });
+                }
+            ");
+
+            // Load Leaflet first, then Routing Machine
+            await JSRuntime.InvokeVoidAsync("loadScript", "/js/leaflet/leaflet.js");
+            Logger.LogInformation("Loaded Leaflet");
+            await JSRuntime.InvokeVoidAsync("loadScript", "/js/leaflet-routing-machine-3.2.12/dist/leaflet-routing-machine.js");
+            Logger.LogInformation("Loaded Leaflet Routing");
+            await JSRuntime.InvokeVoidAsync("loadScript", "/js/location.js");
+            Logger.LogInformation("Loaded Location");
+
+            // Get location
+            await GetUserLocation();
+
+            Logger.LogInformation("Get User Location");
+
+            // Initialize map after scripts are loaded
+            await InitializeMapAsync();
+            Logger.LogInformation("Map Initialized");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Error loading scripts: {ex.Message}");
+        }
+    }
+    private async Task InitializeMapAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeAsync<object>("eval", @"
+                window.mapFunctions = {
+                    initializeMap: function(dotNetHelper) {
+                        if (typeof L === 'undefined') {
+                            console.error('Leaflet is not loaded');
+                            return;
+                        }
+
+                        if (window.mapInstance) {
+                            window.mapInstance.remove();
+                        }
+
+                        var map = L.map('map', {
+                            center: [" + userLocation.Latitude + "," + userLocation.Longitude + @"],
+                            zoom: 15
+                        });
+                        window.mapInstance = map;
+
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '© OpenStreetMap contributors'
+                        }).addTo(map);
+
+                        // Add user location marker with a circle marker
+                        L.circleMarker([" + userLocation.Latitude + "," + userLocation.Longitude + @"], {
+                            radius: 8,
+                            fillColor: '#2196F3',
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 1
+                        }).addTo(map).bindPopup('Your Location');
+
+                        // Initialize routing control
+                        window.routingControl = L.Routing.control({
+                            waypoints: [],
+                            show: false,
+                            addWaypoints: false,
+                            routeWhileDragging: false,
+                            fitSelectedRoutes: true,
+                            showAlternatives: false
+                        }).on('routesfound', function(e) {
+                            var routes = e.routes;
+                            var simplifiedRoutes = routes.map(function(route) {
+                                return {
+                                    summary: route.summary,
+                                    coordinates: route.coordinates.map(function(coord) {
+                                        return [coord.lat, coord.lng];
+                                    }),
+                                    instructions: route.instructions.map(function(instruction) {
+                                        return {
+                                            type: instruction.type,
+                                            text: instruction.text,
+                                            distance: instruction.distance,
+                                            time: instruction.time,
+                                        };
+                                    }),
+                                };
+                            });
+                            var routesJson = JSON.stringify(simplifiedRoutes);
+                            dotNetHelper.invokeMethodAsync('ReceiveRoutes', routesJson);
+                        })
+                        .addTo(map);
+                    },
+
+                    addCarparkMarker: function(lat, lng, carparkId, lots, dotNetHelper) {
+                        var markerColor = lots > 0 ? '#4CAF50' : '#F44336';
+                        // Use circle marker for carparks too
+                        var marker = L.circleMarker([lat, lng], {
+                            radius: 6,
+                            fillColor: markerColor,
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 1
+                        }).addTo(window.mapInstance);
+                        
+                        marker.on('click', function() {
+                            dotNetHelper.invokeMethodAsync('OnMarkerClick', carparkId);
+                        });
+                    },
+
+                    updateRoute: function(fromLat, fromLng, toLat, toLng) {
+                        if (window.routingControl) {
+                            var from = L.latLng(parseFloat(fromLat), parseFloat(fromLng));
+                            var to = L.latLng(parseFloat(toLat), parseFloat(toLng));
+                            window.routingControl.setWaypoints([from, to]);
+                            
+                            // Fit the map to show the entire route
+                            var bounds = L.latLngBounds([from, to]);
+                            window.mapInstance.fitBounds(bounds, { padding: [50, 50] });
+                        } else {
+                            console.error('Routing control not initialized');
+                        }
+                    }
+                };
+            ");
+
+            await JSRuntime.InvokeAsync<object>("mapFunctions.initializeMap", dotNetHelper);
+
+            // Add markers for nearby carparks
+            var userLat = double.Parse(userLocation.Latitude);
+            var userLng = double.Parse(userLocation.Longitude);
+
+            foreach (var carpark in Carparks)
+            {
+                var distance = CalculateDistance(userLat, userLng, 
+                    double.Parse(carpark.XCord), double.Parse(carpark.YCord));
+                if (distance <= SEARCH_RADIUS_KM * 1000)
+                {
+                    carpark.Distance = distance;
+                    await JSRuntime.InvokeAsync<object>("mapFunctions.addCarparkMarker",
+                        carpark.XCord, 
+                        carpark.YCord, 
+                        carpark.CarparkId,
+                        carpark.LotsAvailable ?? 0,
+                        dotNetHelper);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Error initializing map: {ex.Message}");
+        }
+    }
+    [JSInvokable]
+    public void OnMarkerClick(string carparkId)
+    {
+        selectedCarpark = Carparks.FirstOrDefault(c => c.CarparkId == carparkId);
+        showCard = true;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void ReceiveRoutes(string routesData)
+    {
+        JsonDocument routeDetails = JsonDocument.Parse(routesData);
+        try
+        {
+            var route = routeDetails.RootElement[0];
+            userLocation.Instructions = route.GetProperty("instructions")
+                .EnumerateArray()
+                .Select(instruction => new RouteInstruction
+                {
+                    Text = instruction.GetProperty("text").GetString() ?? "",
+                    Distance = instruction.GetProperty("distance").GetDouble(),
+                    Time = instruction.GetProperty("time").GetDouble()
+                })
+                .ToList();
+            userLocation.TotalDistance = route.GetProperty("summary")
+                .GetProperty("totalDistance")
+                .GetDouble();
+            userLocation.TotalTime = route.GetProperty("summary")
+                .GetProperty("totalTime")
+                .GetDouble();
+        }
+        catch
+        {
+            Logger.LogInformation("Error Receiving Route Data");
+        }
+        StateHasChanged();
+    }
+    public void Dispose()
+    {
+        dotNetHelper?.Dispose();
+    }
+}

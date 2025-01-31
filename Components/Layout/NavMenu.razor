@@ -1,0 +1,15 @@
+﻿<MudNavMenu>
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+    <AuthorizeView>
+        <Authorized>
+            <MudNavLink Href="map" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Route">Route Me!</MudNavLink>
+            <MudNavLink Href="bookings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List">My Bookings</MudNavLink>
+            <MudNavLink Href="vehicles" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.DirectionsCarFilled">My Vehicles</MudNavLink>
+            <MudNavLink Href="profile" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Person">My Profile</MudNavLink>
+            <MudNavLink Href="guide" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.QuestionMark">Guide</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+    <AuthorizeView Roles="Admin">
+            <MudNavLink Href="vouchers" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Discount">Vouchers</MudNavLink>
+    </AuthorizeView>
+</MudNavMenu>

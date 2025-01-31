@@ -1,0 +1,147 @@
+﻿@page "/profile"
+@using System.ComponentModel.DataAnnotations;
+@using Microsoft.AspNetCore.Authorization;
+@attribute [Authorize]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+@inject ILogger<Profile> Logger
+
+<PageTitle>Profile</PageTitle>
+
+<AuthorizeView>
+    <Authorized> 
+        <div class="mt-8 d-flex justify-center align-center flex-column flex-grow-1 gap-4 pb-4">
+                <MudText class="mr-2"Typo="Typo.h6">
+                    Welcome @context.User.Claims.FirstOrDefault(u => u.Type == ClaimTypes.Name)?.Value,
+                </MudText>
+        </div>
+        <MudPaper Height="500px" Width="100%">
+            <MudContainer style=@profileView Fixed="true">
+                <div class="d-flex flex-row align-center justify-center pt-4">
+                    <MudText class="mr-2"Typo="Typo.h6">Edit Profile</MudText>
+                    <MudSpacer/>
+                </div>
+                <div class="d-flex flex-column align-center justify-center pt-4">
+                        <div class="d-flex flex-row align-center justify-center gap-4">
+                            <MudPaper Width="200px" Elevation="0">
+                                <MudTextField Label="Email" Variant="Variant.Outlined" ReadOnly="@isReadOnly" @bind-Value="model.Email" For="@(() => model.Email)"/>
+                            </MudPaper>
+                            <MudPaper Width="100px" Elevation="0">
+                                <MudButton OnClick="@ToggleEmailEdit" class="mr-4" EndIcon="@(isReadOnly ? Icons.Material.Filled.Edit : Icons.Material.Filled.Done)" IconSize="Size.Small" Color="@(isReadOnly ? Color.Default : Color.Secondary)">@(isReadOnly ? "Edit" : "Submit")</MudButton>
+                            </MudPaper>
+                        </div>
+                        <div class="d-flex flex-row align-center justify-center gap-4 mt-4">
+                            <MudPaper Width="200px" Elevation="0">
+                                <MudTextField Label="Password" Text="password" Variant="Variant.Outlined" T="string" ReadOnly="true" InputType="InputType.Password"/>
+                            </MudPaper>
+                            <MudPaper Width="100px" Elevation="0">
+                                <MudButton OnClick="@TogglePasswordEdit" class="mr-4" EndIcon="@Icons.Material.Filled.Edit" IconSize="Size.Small">Edit</MudButton>
+                            </MudPaper>
+                        </div>
+                </div>
+            </MudContainer>
+            <MudContainer style=@changePasswordView Fixed="true">
+                <div class="d-flex flex-row align-center justify-center pt-4">
+                    <MudText class="mr-2"Typo="Typo.h6">Change Password</MudText>
+                    <MudSpacer/>
+                    <MudButton OnClick="SwapProfileView" Variant="Variant.Filled" Color="Color.Secondary">Back</MudButton>
+                </div>
+                <div class="d-flex flex-column align-center justify-center mt-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large"></MudIcon>
+                    <EditForm class="pt-4" FormName="editVehicle" Model="@model" OnValidSubmit="ChangePassword" >
+                    <ChildContent Context="formcontext"> 
+                        <DataAnnotationsValidator/>
+                        <div class="d-flex flex-column align-center justify-center gap-4">
+                            <MudPaper Width="100%" Elevation="0">
+                                <MudTextField Label="Old Password" Variant="Variant.Outlined" InputType="InputType.Password" @bind-Value="model.OldPassword" For="@(() => model.OldPassword)"/>
+                            </MudPaper>
+                            <MudPaper Width="100%" Elevation="0">
+                                <MudTextField Label="New Password" Variant="Variant.Outlined" InputType="InputType.Password" @bind-Value="model.NewPassword" For="@(() => model.NewPassword)"/>
+                            </MudPaper>
+                            <MudPaper Width="100%" Elevation="0">
+                        <MudTextField Label="New Password Again" Variant="Variant.Outlined" InputType="InputType.Password" @bind-Value="model.NewPassword2" For="@(() => model.NewPassword2)"/>
+                            </MudPaper>
+                            <MudStaticButton FormAction="FormAction.Submit" Variant="Variant.Filled" Color="Color.Secondary">Submit</MudStaticButton>
+                        </div>
+                    </ChildContent>
+                    </EditForm>
+                </div>
+            </MudContainer>
+        </MudPaper>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private string profileView = "display:block;";
+    private string changePasswordView = "display:none;";
+    private string? username;
+    private User user;
+    private bool isReadOnly = true;
+
+    [SupplyParameterFromForm]
+    private EditProfileForm model { get; set; } = new();
+    public class EditProfileForm
+    {
+        public string? Email { get; set; }
+        [Required]
+        public string? OldPassword { get; set; }
+        [Required]
+        [StringLength(30, ErrorMessage = "Password must be at least 8 characters long.", MinimumLength = 8)]
+        public string? NewPassword { get; set; }
+
+        [Required]
+        [Compare(nameof(NewPassword), ErrorMessage = "The passwords do not match")]
+        public string? NewPassword2 { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider
+            .GetAuthenticationStateAsync();
+        username = authState.User.Claims.FirstOrDefault(u => u.Type == ClaimTypes.Name)?.Value;
+        if (!string.IsNullOrEmpty(username))
+        {
+            user = await UserService.GetUser(username);
+            model.Email = user.Email;
+        }
+        else
+        {
+            // Handle the case where the username is null or empty
+            user = null; // or any other appropriate action
+        }
+    }
+    private async void ToggleEmailEdit()
+    {
+        isReadOnly = !isReadOnly;
+        // Submit Email Change
+        if (isReadOnly)
+        {
+            await UserService.ChangeEmail(username, model.Email);
+            Snackbar.Add("Email successfully changed", Severity.Success);
+        }
+    }
+    private async void ChangePassword() 
+    {
+        if (await UserService.ChangePassword(username, model.OldPassword, model.NewPassword)) {
+            Snackbar.Add("Password successfully changed", Severity.Success);
+        }
+        else {
+            Snackbar.Add("Old password is wrong or new passwords do not match", Severity.Error);
+        }
+        SwapProfileView();
+    }
+    private void TogglePasswordEdit()
+    {
+        profileView = "display:none;";
+        changePasswordView = "display:block;";
+    }
+
+    private void SwapProfileView() 
+    {
+        profileView = "display:block;";
+        changePasswordView = "display:none;";
+    }
+
+
+}

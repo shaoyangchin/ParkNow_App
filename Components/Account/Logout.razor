@@ -1,0 +1,19 @@
+﻿@page "/Account/logout"
+@using Microsoft.AspNetCore.Authentication
+@inject NavigationManager Navigate
+
+<PageTitle>Logout</PageTitle>
+
+<div class="row">
+    <span class="text-danger fw-bolder">You have successfully logged out.</span>
+</div>
+
+@code {
+    [CascadingParameter]
+    public HttpContext? HttpContext{get; set;}
+    protected override async Task OnInitializedAsync() {
+        await HttpContext.SignOutAsync("parknow-auth");
+        Navigate.NavigateTo("/");
+    }
+
+}

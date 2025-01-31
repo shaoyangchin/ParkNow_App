@@ -1,0 +1,87 @@
+﻿@page "/Account/register"
+@using System.Text.RegularExpressions
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using ParkNow.Services
+@inject NavigationManager Navigate;
+@inject IUserService UserService;
+
+<PageTitle>Register</PageTitle>
+
+<div style="display: flex; flex-direction: column; justify-content: center; margin: 20px;">
+    <EditForm FormName="register" Model="@model" OnValidSubmit="RegisterUser">
+    <DataAnnotationsValidator/>
+    <MudGrid Justify="Justify.Center">
+        <MudItem xs="12" sm="6">
+            <MudCard>
+                <MudCardContent>
+                    <MudStaticTextField Label="Username" HelperText="Max. 16 characters"
+                                @bind-Value="model.Username" For="@(() => model.Username)"/>
+                    <MudStaticTextField Label="Email" Class="mt-3"
+                                @bind-Value="model.Email" For="@(() => model.Email)"/>
+                    <MudStaticTextField Label="Password" HelperText="Choose a strong password" Class="mt-3"
+                                @bind-Value="model.Password" For="@(() => model.Password)" InputType="InputType.Password"/>
+                    <MudStaticTextField Label="Re-enter Password" HelperText="Re-enter the password" Class="mt-3"
+                                @bind-Value="model.Password2" For="@(() => model.Password2)" InputType="InputType.Password"/>
+                    @if (showRegisterError)
+                    {
+                        <MudText Color="Color.Error" Class="mt-1">Username already exists</MudText>
+                    }
+                </MudCardContent>
+                <MudCardActions>
+                    <MudStaticButton FormAction="FormAction.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Register</MudStaticButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    </EditForm>
+</div>
+
+@code {
+    [CascadingParameter]
+    public required HttpContext HttpContext{get; set;}
+    private bool showRegisterError = false;
+
+    [SupplyParameterFromForm]
+    private RegisterAccountForm model { get; set; } = new();
+    public class RegisterAccountForm
+    {
+        [Required]
+        [StringLength(16, ErrorMessage = "Name length can't be more than 16.")]
+        public string? Username { get; set; }
+
+        [Required]
+        [EmailAddress]
+        public string? Email { get; set; }
+
+        [Required]
+        [StringLength(30, ErrorMessage = "Password must be at least 8 characters long.", MinimumLength = 8)]
+        public string? Password { get; set; }
+
+        [Required]
+        [Compare(nameof(Password), ErrorMessage = "The passwords do not match")]
+        public string? Password2 { get; set; }
+
+    }
+
+    private async Task RegisterUser()
+    {
+        bool register_success = await UserService.Register(model.Username,model.Email,UserService.HashPassword(model.Password));
+        if (register_success) {
+            var claims = new List<Claim> { new Claim(ClaimTypes.Name, model.Username) };
+            // Get user roles from database
+            var userRole = await UserService.GetUserRole(model.Username);
+            claims.Add(new Claim(ClaimTypes.Role, userRole.ToString()));
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+            await HttpContext.SignInAsync("parknow-auth",principal);
+            Navigate.NavigateTo("/");
+        }
+        else {
+            // Register error
+            showRegisterError = true;
+            StateHasChanged();
+        }
+    }
+}

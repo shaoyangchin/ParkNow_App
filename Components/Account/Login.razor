@@ -1,0 +1,73 @@
+﻿@page "/Account/login"
+@using System.Text.RegularExpressions
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using ParkNow.Services
+@inject NavigationManager Navigate;
+@inject IUserService UserService;
+
+<PageTitle>Login</PageTitle>
+
+<div style="display: flex; flex-direction: column; justify-content: center; margin: 20px;">
+    <EditForm FormName="login" Model="@model" OnValidSubmit="LoginUser">
+    <DataAnnotationsValidator/>
+    <MudGrid Justify="Justify.Center">
+        <MudItem xs="12" sm="6">
+            <MudCard>
+                <MudCardContent>
+                    <MudStaticTextField Label="Username" HelperText="Enter your username"
+                                @bind-Value="model.Username" For="@(() => model.Username)"/>
+                    <MudStaticTextField Label="Password" HelperText="Enter your password" Class="mt-3"
+                                @bind-Value="model.Password" For="@(() => model.Password)" InputType="InputType.Password"/>
+                    @if (showLoginError)
+                    {
+                        <MudText Color="Color.Error" Class="mt-1">Invalid username or password</MudText>
+                    }
+                </MudCardContent>
+                <MudCardActions>
+                    <MudStaticButton FormAction="FormAction.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Login</MudStaticButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    </EditForm>
+</div>
+
+@code {
+    [CascadingParameter]
+    public HttpContext? HttpContext{get; set;}
+    private bool showLoginError = false;
+    
+    [SupplyParameterFromForm]
+    private LoginAccountForm model { get; set; } = new();
+    public class LoginAccountForm
+    {
+        [Required]
+        public string? Username { get; set; }
+
+        [Required]
+        [DataType(DataType.Password)]
+        public string Password { get; set; }
+    }
+
+    private async Task LoginUser()
+    {
+        bool register_success = await UserService.VerifyCredentials(model.Username,model.Password);
+        if (register_success) {
+            var claims = new List<Claim> { new Claim(ClaimTypes.Name, model.Username) };
+            // Get user roles from database
+            var userRole = await UserService.GetUserRole(model.Username);
+            claims.Add(new Claim(ClaimTypes.Role, userRole.ToString()));
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+            await HttpContext.SignInAsync("parknow-auth",principal);
+            Navigate.NavigateTo("/");
+        }
+        else {
+            // Login error
+            showLoginError = true;
+            StateHasChanged();
+        }
+    }
+}

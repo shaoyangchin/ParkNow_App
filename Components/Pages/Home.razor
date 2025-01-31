@@ -1,0 +1,394 @@
+﻿@page "/"
+@inject ICarparkService CarparkService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Home</PageTitle>
+<style>
+/* Scoped landing page styles */
+.parknow-landing {
+    --primary-color: #22c55e;
+    --primary-hover: #16a34a;
+    --background-light: #f0fdf4;
+    --text-dark: #1f2937;
+    --text-light: #4b5563;
+}
+
+.parknow-landing .landing-page {
+    background: linear-gradient(180deg, #ffffff 0%, var(--background-light) 100%);
+}
+
+.parknow-landing .containerr {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* Navigation */
+.parknow-landing .nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem 0;
+}
+
+.parknow-landing .logo-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.parknow-landing .logo {
+    width: 2.5rem;
+    height: 3rem;
+    background-color: #bbf7d0;
+    border-radius: 0.5rem;
+    position: relative;
+}
+
+.parknow-landing .logo-lines {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+}
+
+.parknow-landing .line {
+    width: 0.25rem;
+    height: 100%;
+    background-color: white;
+    margin: 0 0.125rem;
+}
+
+.parknow-landing .line:first-child {
+    transform: skewX(12deg);
+}
+
+.parknow-landing .line:last-child {
+    transform: skewX(-12deg);
+}
+
+.parknow-landing .logo-text {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.parknow-landing .nav-links {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.parknow-landing .nav-link {
+    color: var(--text-light);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.parknow-landing .nav-link:hover {
+    color: var(--text-dark);
+}
+
+/* Buttons */
+.parknow-landing .btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 0.2s;
+}
+
+.parknow-landing .btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.parknow-landing .btn-secondary {
+    background-color: transparent;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.parknow-landing .btn-secondary:hover {
+    background-color: var(--background-light);
+}
+
+/* Hero Section */
+.parknow-landing .hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4rem 0;
+}
+
+.parknow-landing .hero-image {
+    width: 24rem;
+    height: 24rem;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.parknow-landing .hero-content {
+    max-width: 36rem;
+}
+
+.parknow-landing .hero-content h1 {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+    color: var(--text-dark);
+}
+
+.parknow-landing .hero-content p {
+    font-size: 1.25rem;
+    color: var(--text-light);
+    margin-bottom: 2rem;
+}
+
+.parknow-landing .button-group {
+    display: flex;
+    gap: 1rem;
+}
+
+.parknow-landing .image-bg {
+    position: absolute;
+    inset: 0;
+    background-color: #bbf7d0;
+    border-radius: 50%;
+    opacity: 0.2;
+}
+
+.parknow-landing .image-container {
+    position: absolute;
+    inset: 2rem;
+    background-color: #dcfce7;
+    border-radius: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.parknow-landing .image-container i {
+    font-size: 4rem;
+    color: var(--primary-color);
+}
+
+/* Features Section */
+.parknow-landing .features {
+    background-color: white;
+    padding: 4rem 0;
+}
+
+.parknow-landing .features h2 {
+    font-size: 1.875rem;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 3rem;
+    color: var(--text-dark);
+}
+
+.parknow-landing .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+}
+
+.parknow-landing .feature-card {
+    background-color: #f9fafb;
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    transition: box-shadow 0.2s;
+}
+
+.parknow-landing .feature-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.parknow-landing .mud-paper:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.parknow-landing .mud-paper {
+    border-radius: 0.75rem;
+}
+</style>
+<AuthorizeView>
+    <NotAuthorized>
+    <div class="parknow-landing">
+    <div class="min-h-screen landing-page">
+                <!-- Hero Section -->
+                <div class="hero containerr">
+                    <div class="hero-content">
+                        <h1>Find Perfect Parking in Seconds</h1>
+                        <p>Your ultimate parking solution that helps you discover, book, and pay for parking spots instantly across the city.</p>
+                        <div class="button-group">
+                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Href="/Account/Login" Class="btn-primary" StartIcon="@Icons.Material.Filled.DirectionsCar">
+                                Start Parking Now
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Href="/Guide" Class="btn-secondary">
+                                Learn More
+                            </MudButton>
+                        </div>
+                    </div>
+                    <div class="flex-d justify-center align-center ml-10 d-none d-md-flex">
+                        <MudImage
+                            Src="/images/parknow_logo.png" 
+                            Class="ml-20"
+                            Width="600"
+                            Style="max-width: 70%; max-height: 70%; object-fit: contain;" />
+                    </div>
+                </div>
+
+                <!-- Features Section -->
+                <div class="features">
+                    <div class="containerr">
+                        <h2>Why Choose ParkNow?</h2>
+                            <MudGrid Spacing="4" Class="mt-8">
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudPaper Elevation="0" Class="pa-4 h-100" Style="background-color: #f9fafb; transition: all 0.3s;">
+                                        <div class="d-flex flex-column align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.Timer" 
+                                                    Color="Color.Secondary" 
+                                                    Size="Size.Large" 
+                                                    Class="mb-4" 
+                                                    Style="width: 48px; height: 48px;"/>
+                                            <MudText Typo="Typo.h6" 
+                                                    Class="mb-2 text-center">
+                                                Real-Time Availability
+                                            </MudText>
+                                            <MudText Typo="Typo.body1" 
+                                                    Class="text-center">
+                                                Find available parking spots in real-time, saving you valuable time and fuel.
+                                            </MudText>
+                                        </div>
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudPaper Elevation="0" Class="pa-4 h-100" Style="background-color: #f9fafb; transition: all 0.3s;">
+                                        <div class="d-flex flex-column align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.Payment" 
+                                                    Color="Color.Secondary" 
+                                                    Size="Size.Large" 
+                                                    Class="mb-4" 
+                                                    Style="width: 48px; height: 48px;"/>
+                                            <MudText Typo="Typo.h6" 
+                                                    Class="mb-2 text-center">
+                                                Easy Payment
+                                            </MudText>
+                                            <MudText Typo="Typo.body1" 
+                                                    Class="text-center">
+                                                Seamless payment process with multiple options including credit cards and mobile payments.
+                                            </MudText>
+                                        </div>
+                                    </MudPaper>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudPaper Elevation="0" Class="pa-4 h-100" Style="background-color: #f9fafb; transition: all 0.3s;">
+                                        <div class="d-flex flex-column align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.LocalParking" 
+                                                    Color="Color.Secondary" 
+                                                    Size="Size.Large" 
+                                                    Class="mb-4" 
+                                                    Style="width: 48px; height: 48px;"/>
+                                            <MudText Typo="Typo.h6" 
+                                                    Class="mb-2 text-center">
+                                                Guaranteed Spots
+                                            </MudText>
+                                            <MudText Typo="Typo.body1" 
+                                                    Class="text-center">
+                                                Book your parking spot in advance and never worry about finding parking again.
+                                            </MudText>
+                                        </div>
+                                    </MudPaper>
+                                </MudItem>
+                            </MudGrid>
+
+                            <style>
+                                .mud-paper {
+                                    border-radius: 0.75rem;
+                                }
+                                .mud-paper:hover {
+                                    transform: translateY(-2px);
+                                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                                }
+                            </style>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </NotAuthorized>
+    <Authorized> 
+        <div class="mt-8 d-flex justify-center align-center flex-column flex-grow-1 gap-4 mb-4">
+                <MudText class="mr-2"Typo="Typo.h6">
+                    Welcome @context.User.Claims.FirstOrDefault(u => u.Type == ClaimTypes.Name)?.Value,
+                    need a carpark?
+                </MudText>
+                <MudPaper Width="22em" Elevation="0"> 
+                    <MudTextField Immediate="true" @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"/>
+                </MudPaper>
+        </div>
+        <MudTable T="Carpark" class="mt-3" Items="@Carparks" OnRowClick="@NavigateToYourUrl" Height="450px" Hover="true" Breakpoint="Breakpoint.Sm" FixedHeader="true" Virtualize="true" SortLabel="Sort By" Elevation="0" Filter="new Func<Carpark,bool>(FilterFunc)">
+            <HeaderContent> 
+                <MudTh><MudTableSortLabel SortBy="new Func<Carpark, object>(x=>x.CarparkId)">Id</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Carpark, object>(x=>x.Address)">Address</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Carpark, object>(x=>x.Type)">Type</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Carpark, object>(x=>x.ShortTermParkingType)">Short Term Parking</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Carpark, object>(x=>x.FreeParking)">Free Parking</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Carpark, object>(x=>x.NightParking)">Night Parking</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy='new Func<Carpark, object>(x => (x.LotsAvailable.HasValue ? (x.LotsAvailable) : 0))'>Lots</MudTableSortLabel></MudTh>
+            </HeaderContent>
+            <RowTemplate Context="col">
+                <MudTd DataLabel="Id">@col.CarparkId</MudTd>
+                <MudTd Style="word-break: break-word;" DataLabel="Address">@col.Address</MudTd>
+                <MudTd DataLabel="Type">@col.Type</MudTd>
+                <MudTd DataLabel="Short Term Parking">@col.ShortTermParkingType</MudTd>
+                <MudTd DataLabel="Free Parking">@col.FreeParking</MudTd>
+                <MudTd DataLabel="Night Parking">@col.NightParking</MudTd>
+                @if (@col.LotsAvailable == null) {
+                    <MudTd DataLabel="Lots">Unavailable</MudTd>
+                }
+                else {
+                    <MudTd DataLabel="Lots">@col.LotsAvailable</MudTd>
+                }
+            </RowTemplate>
+        </MudTable>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    public string? searchString {get; set;} 
+    private IEnumerable<Carpark> Carparks = new List<Carpark>();
+    protected override async Task OnInitializedAsync()
+    {
+        Carparks = await CarparkService.GetAllCarparks();
+    }
+    private bool FilterFunc(Carpark c)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (c.CarparkId.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (c.Address.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+    public void NavigateToYourUrl(TableRowClickEventArgs<Carpark> cp) {
+        NavigationManager.NavigateTo("/carparks/"+cp.Item.CarparkId, true);
+    }
+}

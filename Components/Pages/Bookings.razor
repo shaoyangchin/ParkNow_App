@@ -1,0 +1,464 @@
+﻿@page "/bookings"
+@implements IDisposable
+@using Microsoft.AspNetCore.Authorization
+@using System.ComponentModel.DataAnnotations
+@inject IBookingService BookingService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize]
+
+<PageTitle>My Bookings</PageTitle>
+<MudPaper>
+    <MudContainer style=@bookingView Fixed="true">
+        <MudCard Elevation="0">
+            <MudCardHeader>
+                <MudText Typo="Typo.h5">Your Bookings</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem xs="12" md="4">
+                        <MudTextField @bind-Value="searchString" 
+                            Placeholder="Search"
+                            Label=" " 
+                            Adornment="Adornment.End" 
+                            AdornmentIcon="@Icons.Material.Filled.Search"
+                            Clearable="true"
+                            IconSize="Size.Medium"/>
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudDatePicker Label="From" 
+                        Color="Color.Secondary"
+                        Clearable="true"
+                        DateChanged="OnStartDateRangeChanged"/>
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudDatePicker Label="To" 
+                            Color="Color.Secondary"
+                            Clearable="true"
+                            DateChanged="OnEndDateRangeChanged"/>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+        <div class="mt-5" style="height: 500px; overflow: auto;">
+            <MudTable Items="@User_Bookings" Hover="true" Breakpoint="Breakpoint.Sm" Virtualize="true" LoadingProgressColor="Color.Info" Class="overflow-auto" Filter="new Func<Booking,bool>(FilterFunc)">
+                <RowTemplate Context="col">
+                    <div class="d-flex flex-row align-center justify-start gap-2 pt-4 pb-4">
+                        <MudIconButton class="ml-2" Icon="@Icons.Material.Filled.ExpandMore" OnClick="@(() => ToggleExpand(col))" Size="Size.Medium"/>
+                        <MudIcon class="mr-4" Icon="@Icons.Material.Filled.LocalParking" Size="Size.Large"></MudIcon>
+                        <MudText Style="">Booking #@col.BookingId</MudText>
+                        <MudSpacer></MudSpacer>
+                        <div class="d-flex flex-column flex-sm-row align-end justify-center gap-2 mr-6">
+                            <MudChip T="string" Color="@(GetStatusColor(col.Status))" Size="Size.Medium">@col.Status</MudChip>
+                            @if (col.Status == Booking.Statuses.Active) {
+                                <MudButton OnClick="@(() => OpenBookingInfoAsync(col))" EndIcon="@Icons.Material.Filled.StopCircle" IconSize="Size.Small">End</MudButton>
+                            }
+                            else if (col.Status != Booking.Statuses.Completed) {
+                                <MudButton OnClick="@(() => EditBookingView(col))" EndIcon="@Icons.Material.Filled.Edit" IconSize="Size.Small">Edit</MudButton>
+                            }
+                        </div>
+                    </div>
+                </RowTemplate>
+                <ChildRowContent Context="col">
+                    @if (expandedRows.Contains(col)) {
+                        <MudTr>
+                            <MudCard Elevation="0">
+                                <MudCardContent Style="max-height: 200px; overflow-y: auto;">
+                                    <div class="d-flex flex-column gap-4">
+                                        <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                            <MudText Class="font-weight-bold" Style="min-width: 140px;">Carpark ID:</MudText>
+                                            <MudText Style="flex: 1;">@col.Carpark.CarparkId</MudText>
+                                        </div>
+                                        <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                            <MudText Class="font-weight-bold" Style="min-width: 140px;">Carpark Address:</MudText>
+                                            <MudText Style="flex: 1;">@col.Carpark.Address</MudText>
+                                        </div>
+                                        <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                            <MudText Class="font-weight-bold" Style="min-width: 140px;">Vehicle:</MudText>
+                                            <MudText Style="flex: 1;">@col.Vehicle.LicensePlate</MudText>
+                                        </div>
+                                        <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                            <MudText Class="font-weight-bold" Style="min-width: 140px;">Booking Time:</MudText>
+                                            <MudText Style="flex: 1;">@col.BookingTime.ToString("dd MMMM yyyy hh:mm tt ")</MudText>
+                                        </div>
+                                        <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                            <MudText Class="font-weight-bold" Style="min-width: 140px;">Start Time:</MudText>
+                                            <MudText Style="flex: 1;">@col.StartTime?.ToString("dd MMMM yyyy hh:mm tt ")</MudText>
+                                        </div>
+                                        <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                            <MudText Class="font-weight-bold" Style="min-width: 140px;">End Time:</MudText>
+                                            <MudText Style="flex: 1;">@col.EndTime?.ToString("dd MMMM yyyy hh:mm tt ")</MudText>
+                                        </div>
+                                        <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                            <MudText Class="font-weight-bold" Style="min-width: 140px;">Cost:</MudText>
+                                            <MudText Style="flex: 1;">$@col.Payment.Amount.ToString("F2")</MudText>
+                                        </div>
+                                        @if (col.Payment.Voucher != null) {
+                                            <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                                <MudText Class="font-weight-bold" Style="min-width: 140px;">Voucher:</MudText>
+                                                <MudText Style="flex: 1;">@col.Payment.Voucher.VoucherId.ToString()</MudText>
+                                            </div>
+                                            <div class="d-flex" style="word-wrap: break-word; white-space: normal;">
+                                                <MudText Class="font-weight-bold" Style="min-width: 140px;">Discount:</MudText>
+                                                <MudText Style="flex: 1;">$@col.Payment.Voucher.Amount.ToString("F2")</MudText>
+                                            </div>
+                                        }
+                                    </div>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudTr>
+                    }
+                </ChildRowContent>
+            </MudTable>
+        </div>
+    </MudContainer>
+    <MudContainer style="@editBookingView" Fixed="true">
+        <div class="d-flex flex-row align-center justify-center pt-4 pb-4">
+            <MudText class="mr-2"Typo="Typo.h6">Edit Booking</MudText>
+            <MudSpacer></MudSpacer>
+            <MudButton OnClick="SwapBookingView" Variant="Variant.Filled" Color="Color.Secondary">Back</MudButton>
+        </div>
+        <div class="d-flex flex-column align-center justify-center pt-4 pb-4">
+            <MudIcon Icon="@Icons.Material.Filled.LocalParking" Size="Size.Large"></MudIcon>
+            <EditForm class="pt-4" FormName="editBooking" Model="@model" OnValidSubmit="EditBooking">
+            <ChildContent Context="formcontext"> 
+                <DataAnnotationsValidator/>
+                <div class="d-flex flex-column align-center justify-center gap-4">
+                    <div class="d-flex justify-center align-center flex-row flex-grow-1 gap-4 mt-2">
+                        <MudTimePicker Color="Color.Secondary" Time="@model.StartTime" MinuteSelectionStep="1" OpenTo="OpenTo.Minutes" TimeChanged="@(time => UpdateStartTime(time))"/>
+                        <MudTimePicker Color="Color.Secondary" Time="@model.EndTime" MinuteSelectionStep="1" OpenTo="OpenTo.Minutes" TimeChanged="@(time => UpdateEndTime(time))"/>
+                    </div>
+                    <div class="d-flex justify-center align-center flex-row flex-grow-1 gap-4 mt-4">
+                        <MudDatePicker Color="Color.Secondary" Date="@model.StartDate" DateChanged="@(date => UpdateStartDate(date))"/>
+                        <MudDatePicker Color="Color.Secondary" Date="@model.EndDate" DateChanged="@(date => UpdateEndDate(date))"/>
+                    </div>
+                    <MudText Align="Align.Center" Typo="Typo.h6" class="mt-5">$@((price - discount) <= 0 ? "Free" : $"{price - discount}")</MudText>
+                    <div class="d-flex justify-center align-center flex-row flex-grow-1 gap-4 mt-4">
+                        <MudStaticButton FormAction="FormAction.Submit" Variant="Variant.Filled" Color="Color.Secondary">Change</MudStaticButton>
+                        <MudButton OnClick="DeleteBooking" Variant="Variant.Filled" Color="Color.Error">Delete</MudButton>
+                    </div>
+                </div>
+            </ChildContent>
+            </EditForm>
+        </div>
+    </MudContainer>
+</MudPaper>
+
+
+@code {
+    private IEnumerable<Booking> User_Bookings = new List<Booking>();
+    private HashSet<Booking> expandedRows = new HashSet<Booking>();
+    private string bookingView = "display:block;"; 
+    private string editBookingView = "display:none;";
+    private string username = "";
+    private decimal price = 0M;
+    private decimal discount = 0M;
+    private string searchString = "";
+    private DateTime? startDateFilter;
+    private DateTime? endDateFilter;
+
+    [SupplyParameterFromForm]
+    private EditBookingForm model { get; set; } = new();
+    public class EditBookingForm
+    {
+        public Booking? Booking {get; set;}
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public TimeSpan? StartTime { get; set; }
+        public TimeSpan? EndTime { get; set; }
+        public DateTime? GetStartDateTime()
+        {
+            return StartDate.HasValue && StartTime.HasValue
+                ? StartDate.Value.Date + StartTime.Value
+                : (DateTime?)null;
+        }
+
+        public DateTime? GetEndDateTime()
+        {
+            return EndDate.HasValue && EndTime.HasValue
+                ? EndDate.Value.Date + EndTime.Value
+                : (DateTime?)null;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBookings();
+    }
+
+    private async Task LoadBookings()
+    {
+        try 
+        {
+            var authState = await AuthenticationStateProvider
+                .GetAuthenticationStateAsync();
+            username = authState.User.Claims.FirstOrDefault(u => u.Type == ClaimTypes.Name)?.Value;
+            
+            if (!string.IsNullOrEmpty(username))
+            {
+                var bookings = new List<Booking>();
+                bookings = await BookingService.GetUserBookings(username);   
+                if (bookings.Any())
+                {
+                    User_Bookings = bookings.OrderBy(b => 
+                        b.Status switch
+                        {
+                            Booking.Statuses.Active => 0,
+                            Booking.Statuses.Scheduled => 1,
+                            Booking.Statuses.Completed => 2,
+                            Booking.Statuses.Cancelled => 3,
+                            _ => 4
+                        }).ToList();
+                }
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Error loading bookings", Severity.Error);
+        }
+    }
+
+    private void OnStartDateRangeChanged(DateTime? date) {
+        startDateFilter = date;
+        // Force table refresh
+        StateHasChanged();
+    }
+    private void OnEndDateRangeChanged(DateTime? date) {
+        endDateFilter = date;
+        // Force table refresh
+        StateHasChanged();
+    }
+    private bool FilterFunc(Booking booking) {
+        // First check the date range
+        bool dateMatch = true;
+        if (startDateFilter.HasValue && endDateFilter.HasValue)
+        {
+            var startDate = startDateFilter.Value.Date;
+            var endDate = endDateFilter.Value.Date;
+            dateMatch = booking.StartTime?.Date <= endDate && 
+                    booking.EndTime?.Date >= startDate;
+        }
+        else if (startDateFilter.HasValue)
+        {
+            dateMatch = booking.StartTime?.Date >= startDateFilter.Value.Date;
+        }
+        else if (endDateFilter.HasValue)
+        {
+            dateMatch = booking.EndTime?.Date <= endDateFilter.Value.Date;
+        }
+
+        // Then check the text search
+        bool textMatch = string.IsNullOrWhiteSpace(searchString) || 
+            booking.BookingId.ToString().Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
+            booking.Status.ToString().Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
+            booking.Carpark.CarparkId.Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
+            booking.Carpark.Address.Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
+            booking.Vehicle.LicensePlate.Contains(searchString, StringComparison.OrdinalIgnoreCase);
+
+        // Item must match both filters
+        return dateMatch && textMatch;
+    }
+    private void SwapBookingView() {  
+        bookingView = "display:block;";
+        editBookingView = "display:none;";
+        model = new();
+        StateHasChanged();
+    }
+    private void EditBookingView(Booking booking) {  
+        // If already completed
+        if (booking.Status == Booking.Statuses.Completed) {
+            Snackbar.Add("Booking has already completed", Severity.Error);
+            return;
+        }
+        bookingView = "display:none;";
+        editBookingView = "display:block;";
+        model.StartDate = booking.StartTime?.Date;
+        model.StartTime = booking.StartTime?.TimeOfDay;
+        model.EndDate = booking.EndTime?.Date;
+        model.EndTime = booking.EndTime?.TimeOfDay;
+        model.Booking = booking;
+        if (model.Booking.Payment.Discount != null) {
+            discount = model.Booking.Payment.Discount.Value;
+        }
+        StateHasChanged();
+    }
+    private void UpdateStartDate(DateTime? date) {
+        model.StartDate = date;
+        UpdatePrice();
+    }
+    private void UpdateEndDate(DateTime? date) {
+        model.EndDate = date;
+        UpdatePrice();
+    }
+    private void UpdateStartTime(TimeSpan? time) {
+        model.StartTime = time;
+        UpdatePrice();
+    }
+    private void UpdateEndTime(TimeSpan? time) {
+        model.EndTime = time;
+        UpdatePrice();
+    }
+    private void UpdatePrice() {
+        var startDateTime = model.GetStartDateTime();
+        var endDateTime = model.GetEndDateTime();
+
+        if (startDateTime.HasValue && endDateTime.HasValue) // Ensure values are not null
+        {
+            price = BookingService.CalculatePrice(startDateTime.Value, endDateTime.Value, model.Booking.Carpark);
+        }
+    }
+    private async Task EditBooking() {
+        var startDateTime = model.GetStartDateTime();
+        var endDateTime = model.GetEndDateTime();
+
+        var errors = new List<string>();
+        if (!startDateTime.HasValue)
+        {
+            errors.Add("Start date and time are required");
+        }
+        else if (startDateTime.Value <= DateTime.Now)
+        {
+            errors.Add("Start date and time must be in the future");
+        }
+
+        if (endDateTime == null)
+        {
+            errors.Add("End date and time are required");
+        }
+        else if (endDateTime.Value <= startDateTime.Value)
+        {
+            errors.Add("End date and time must be after the start date and time");
+        }
+
+        var price = BookingService.CalculatePrice(model.GetStartDateTime() ?? DateTime.Now,model.GetEndDateTime() ?? DateTime.Now,model.Booking.Carpark);
+        if (price <= 0) {
+            errors.Add("Booking is unavailable for this time period");
+        }
+
+        if (errors.Any())
+        {
+            foreach (var error in errors)
+            {
+                Snackbar.Add(error, Severity.Error);
+            }
+            return;
+        }
+
+        Booking temp = new Booking {
+            BookingId = model.Booking.BookingId,
+            Vehicle = model.Booking.Vehicle,
+            Carpark = model.Booking.Carpark,
+            User = model.Booking.User,
+            StartTime = model.GetStartDateTime(),
+            EndTime = model.GetEndDateTime(),
+            BookingTime = model.Booking.BookingTime,
+            Cost = price,
+            Status = Booking.Statuses.Scheduled,
+        };
+        bool success = await BookingService.UpdateBooking(temp);
+        if (success) {
+            SwapBookingView();
+            User_Bookings = await BookingService.GetUserBookings(username);
+            User_Bookings = User_Bookings.OrderBy(b => 
+            b.Status switch
+            {
+                Booking.Statuses.Active => 0,
+                Booking.Statuses.Scheduled => 1,
+                Booking.Statuses.Completed => 2,
+                Booking.Statuses.Cancelled => 3,
+                _ => 4
+            }).ToList();
+            Snackbar.Add("Booking successfully edited", Severity.Success);
+            StateHasChanged();
+        }
+        else {
+            Snackbar.Add("Error editing Booking", Severity.Error);
+        }
+    }
+    private async Task DeleteBooking()
+    {  
+        bool success = await BookingService.DeleteBooking(model.Booking.BookingId);
+        if (success) {
+            SwapBookingView();
+            User_Bookings = await BookingService.GetUserBookings(username);
+            User_Bookings = User_Bookings.OrderBy(b => 
+            b.Status switch
+            {
+                Booking.Statuses.Active => 0,
+                Booking.Statuses.Scheduled => 1,
+                Booking.Statuses.Completed => 2,
+                Booking.Statuses.Cancelled => 3,
+                _ => 4
+            }).ToList();
+            Snackbar.Add("Booking successfully deleted", Severity.Success);
+            StateHasChanged();
+        }
+        else {
+            Snackbar.Add("Error deleting booking", Severity.Error);
+        }
+    }
+    private async Task OpenBookingInfoAsync(Booking booking)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+
+        var dialog = await DialogService.ShowAsync<BookingDialog>("End Booking Dialog", options);
+        var result = await dialog.Result;
+        if (!result.Canceled && result.Data is bool data && data)
+        {
+            // Calculate new price
+            var current_price = BookingService.CalculatePrice(booking.StartTime ?? DateTime.Now, DateTime.Now, booking.Carpark);
+            // Change Booking
+            Booking temp = new Booking {
+                BookingId = booking.BookingId,
+                Vehicle = booking.Vehicle,
+                Carpark = booking.Carpark,
+                User = booking.User,
+                StartTime = booking.StartTime,
+                EndTime = DateTime.Now,
+                BookingTime = booking.BookingTime,
+                Cost = current_price,
+                Status = Booking.Statuses.Completed,
+            };
+            bool success = await BookingService.UpdateBooking(temp);
+            if (success) {
+                SwapBookingView();
+                User_Bookings = await BookingService.GetUserBookings(username);
+                User_Bookings = User_Bookings.OrderBy(b => 
+                b.Status switch
+                {
+                    Booking.Statuses.Active => 0,
+                    Booking.Statuses.Scheduled => 1,
+                    Booking.Statuses.Completed => 2,
+                    Booking.Statuses.Cancelled => 3,
+                    _ => 4
+                }).ToList();
+                Snackbar.Add("Booking successfully edited", Severity.Success);
+                StateHasChanged();
+            }
+            else {
+                Snackbar.Add("Error editing Booking", Severity.Error);
+            }
+        }
+    }
+    private void ToggleExpand(Booking booking)
+    {
+        if (expandedRows.Contains(booking))
+            expandedRows.Remove(booking);
+        else
+            expandedRows.Add(booking);
+    }
+    private Color GetStatusColor(Booking.Statuses status)
+    {
+        return status switch
+        {
+            Booking.Statuses.Active => Color.Success,
+            Booking.Statuses.Completed => Color.Info,
+            Booking.Statuses.Cancelled => Color.Error,
+            _ => Color.Default
+        };
+    }
+    public void Dispose()
+    {
+    }
+}

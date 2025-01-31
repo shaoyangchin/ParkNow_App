@@ -1,0 +1,97 @@
+﻿@page "/guide"
+
+<PageTitle>User Guide</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h4" Class="mb-4">ParkNow Application Guide</MudText>
+        <MudText Typo="Typo.body1" Class="mb-8">
+            Welcome to ParkNow! This guide will walk you through using the app, from creating an account to booking a parking space and making payments.
+            Each section includes instructions for core features, ensuring you have everything you need for a seamless experience.
+        </MudText>
+
+        <MudExpansionPanels Elevation="0" Class="mb-8">
+            <MudExpansionPanel Text="Getting Started">
+                <MudText Typo="Typo.body1" Class="mb-3">
+                    To begin using ParkNow, open the app to access the "Login" or "Register" options on the home screen. 
+                    If you're a new user, select "Register" to create a new account. Fill in the required fields:
+                </MudText>
+                <MudList T="string" Dense="true" Class="ml-4 mb-3">
+                    <MudListItem Icon="@Icons.Material.Filled.Person">Name</MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Email">Email</MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Lock">Password</MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Lock">Re-type Password</MudListItem>
+                </MudList>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="User Account Management">
+                <MudText Typo="Typo.body1">
+                    Once logged in, you can access your profile to update details or change your password. 
+                    For security, it's recommended to log out when you're done. 
+                    If you forget your password, use the "Forgot Password?" option on the login screen and follow the instructions to reset it via email.
+                </MudText>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Adding Vehicle Details">
+                <MudText Typo="Typo.body1">
+                    To register your vehicle, go to the Vehicle Management section, where you can add important details like License Plate Number, 
+                    Model, and Vehicle Type. If you need to update your vehicle information, go to Vehicle Management, make the necessary changes, 
+                    and press Save to update.
+                </MudText>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Finding a Parking Spot">
+                <MudText Typo="Typo.body1">
+                    To search for parking, enter a Location, Carpark Number, or Postal Code. ParkNow will display a list of car parks within 
+                    a specific radius, showing rates, real-time availability, and distance. Each search result includes parking details, 
+                    including rates, location, distance from your current position, and parking options such as Short-Term or Night Parking.
+                </MudText>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Booking a Parking Slot">
+                <MudText Typo="Typo.body1">
+                    When you're ready to reserve a parking spot, select a parking lot, enter your vehicle details, and choose the booking duration. 
+                    The app will display start and end times, along with the estimated cost of the booking. If you need to modify or cancel your 
+                    reservation, you can do so within the specified timeframe in the Booking Management section.
+                </MudText>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Navigation Assistance">
+                <MudText Typo="Typo.body1">
+                    After confirming your booking, you can access navigation assistance within the app, which will guide you to the parking location 
+                    using Google Maps. Be sure to allow location access for accurate turn-by-turn navigation.
+                </MudText>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Making a Payment">
+                <MudText Typo="Typo.body1">
+                    To complete your booking, go to the Payment Screen and enter your Credit Card Details, including Expiration Date and CVV Code. 
+                    If you have a voucher code, enter it during the payment process to apply any discounts. If you cancel your booking, 
+                    the system will automatically handle any refunds.
+                </MudText>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Viewing Parking History">
+                <MudText Typo="Typo.body1">
+                    The History section allows you to view past parking sessions, including date, time, location, and cost. 
+                    You can filter your history by Date Range, Car Park Name, or Frequency of Visits to see specific transactions.
+                </MudText>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Help and Support">
+                <MudText Typo="Typo.body1">
+                    Access this guide anytime from within the app by selecting it from the hamburger icon at the side. 
+                    The Help section provides tutorials, troubleshooting tips, and detailed information on the app's features.
+                </MudText>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+
+        <MudAlert Severity="Severity.Info" Class="mt-8">
+            Thank you for using ParkNow! For further assistance, please contact support via the Help Center.
+        </MudAlert>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    // Add any necessary code-behind logic here
+}

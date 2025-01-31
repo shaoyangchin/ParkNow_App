@@ -1,0 +1,231 @@
+﻿@page "/vehicles"
+@using System.ComponentModel.DataAnnotations;
+@using Microsoft.AspNetCore.Authorization;
+@attribute [Authorize]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IVehicleService VehicleService
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+@inject ILogger<Vehicles> Logger
+
+<PageTitle>Vehicles</PageTitle>
+
+<AuthorizeView>
+    <Authorized> 
+        <div class="mt-8 d-flex justify-center align-center flex-column flex-grow-1 gap-4 pb-4">
+                <MudText class="mr-2"Typo="Typo.h6">
+                    Welcome @context.User.Claims.FirstOrDefault(u => u.Type == ClaimTypes.Name)?.Value,
+                </MudText>
+        </div>
+        <MudPaper Height="500px" Width="100%">
+            <MudContainer style=@vehicleView Fixed="true">
+                <div class="d-flex flex-row align-center justify-center pt-4 pb-4">
+                    <MudText class="mr-2"Typo="Typo.h6">Your Vehicles</MudText>
+                    <MudSpacer/>
+                    <MudButton OnClick="SwapCreateVehicleView" Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add">Add Vehicle</MudButton>
+                </div>
+                <MudTable Items="@User_Vehicles" Hover="true" Breakpoint="Breakpoint.Sm" LoadingProgressColor="Color.Info">
+                    <RowTemplate Context="col">
+                        <div class="d-flex flex-row align-center justify-left gap-4 pt-4 pb-4">
+                            <MudIcon class="ml-4" Icon="@Icons.Material.Filled.DirectionsCarFilled" Size="Size.Large"></MudIcon>
+                            <MudText Style="">@col.LicensePlate</MudText>
+                            <MudSpacer></MudSpacer>
+                            <MudButton OnClick="@(() => EditVehicleView(col))" class="mr-4" EndIcon="@Icons.Material.Filled.Edit" IconSize="Size.Small">Edit</MudButton>
+                        </div>
+                    </RowTemplate>
+                </MudTable>
+            </MudContainer>
+            <MudContainer style=@createVehicleView Fixed="true">
+                <div class="d-flex flex-row align-center justify-center pt-4">
+                    <MudText class="mr-2"Typo="Typo.h6">New Vehicle</MudText>
+                    <MudSpacer/>
+                    <MudButton OnClick="SwapVehicleView" Variant="Variant.Filled" Color="Color.Secondary">Back</MudButton>
+                </div>
+                <div class="d-flex flex-column align-center justify-center pt-4">
+                    <MudIcon Icon="@Icons.Material.Filled.DirectionsCarFilled" Size="Size.Large"></MudIcon>
+                    <EditForm class="pt-4" FormName="createVehicle" Model="@model" OnValidSubmit="CreateNewVehicle" >
+                    <ChildContent Context="formcontext"> 
+                        <DataAnnotationsValidator/>
+                        <div class="d-flex flex-column align-center justify-center gap-4">
+                            <MudPaper Width="100%" Elevation="0">
+                                <MudTextField Placeholder="License Plate" Variant="Variant.Outlined" @bind-Value="model.LicensePlate" For="@(() => model.LicensePlate)"/>
+                            </MudPaper>
+                            <MudPaper Width="100%" Elevation="0">
+                                <MudTextField Placeholder="Vehicle Model" Variant="Variant.Outlined" @bind-Value="model.VehicleModel" For="@(() => model.VehicleModel)"/>
+                            </MudPaper>
+                            <MudPaper Width="100%" Elevation="0">
+                                <MudSelect Variant="Variant.Outlined" @bind-Value="model.VehicleCarType">
+                                    @foreach (var type in Enum.GetValues(typeof(Vehicle.CarTypes)).Cast<Vehicle.CarTypes>())
+                                    {
+                                        <MudSelectItem Value="@(type)"/>
+                                    }
+                                </MudSelect>
+                            </MudPaper>
+                            <MudStaticButton FormAction="FormAction.Submit" Variant="Variant.Filled" Color="Color.Secondary">Submit</MudStaticButton>
+                        </div>
+                    </ChildContent>
+                    </EditForm>
+                </div>
+            </MudContainer>
+            <MudContainer style=@editVehicleView Fixed="true">
+                <div class="d-flex flex-row align-center justify-center pt-4">
+                    <MudText class="mr-2"Typo="Typo.h6">Edit Vehicle</MudText>
+                    <MudSpacer/>
+                    <MudButton OnClick="SwapVehicleView" Variant="Variant.Filled" Color="Color.Secondary">Back</MudButton>
+                </div>
+                 <div class="d-flex flex-column align-center justify-center pt-4">
+                    <MudIcon Icon="@Icons.Material.Filled.DirectionsCarFilled" Size="Size.Large"></MudIcon>
+                    <EditForm class="pt-4" FormName="editVehicle" Model="@model2" OnValidSubmit="EditVehicle" >
+                    <ChildContent Context="formcontext"> 
+                        <DataAnnotationsValidator/>
+                        <div class="d-flex flex-column align-center justify-center gap-4">
+                            <MudPaper Width="100%" Elevation="0">
+                                <MudTextField Placeholder="License Plate" Variant="Variant.Outlined" @bind-Value="model2.LicensePlate" For="@(() => model2.LicensePlate)"/>
+                            </MudPaper>
+                            <MudPaper Width="100%" Elevation="0">
+                                <MudTextField Placeholder="Vehicle Model" Variant="Variant.Outlined" @bind-Value="model2.VehicleModel" For="@(() => model2.VehicleModel)"/>
+                            </MudPaper>
+                            <MudPaper Width="100%" Elevation="0">
+                                <MudSelect Variant="Variant.Outlined" @bind-Value="model2.VehicleCarType">
+                                    @foreach (var type in Enum.GetValues(typeof(Vehicle.CarTypes)).Cast<Vehicle.CarTypes>())
+                                    {
+                                        <MudSelectItem Value="@(type)"/>
+                                    }
+                                </MudSelect>
+                            </MudPaper>
+                            <div class="d-flex flex-row align-center justify-center gap-4 pt-4">
+                                <MudStaticButton FormAction="FormAction.Submit" Variant="Variant.Filled" Color="Color.Secondary">Submit</MudStaticButton>
+                                <MudButton OnClick="DeleteVehicle" Variant="Variant.Filled" Color="Color.Error">Delete</MudButton>
+                            </div>
+                        </div>
+                    </ChildContent>
+                    </EditForm>
+                </div>
+            </MudContainer>
+        </MudPaper>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private IEnumerable<Vehicle> User_Vehicles = new List<Vehicle>();
+    private string vehicleView = "display:block;";   
+    private string createVehicleView = "display:none;";
+    private string editVehicleView = "display:none;";
+    private string? username;
+    
+    [SupplyParameterFromForm]
+    private NewVehicleForm model { get; set; } = new();
+    public class NewVehicleForm
+    {
+        [Required]
+        public string? LicensePlate { get; set; }
+        [Required]
+        public string? VehicleModel { get; set; }
+        [Required]
+        public Vehicle.CarTypes VehicleCarType { get; set; }
+    }
+
+    [SupplyParameterFromForm]
+    private EditVehicleForm model2 { get; set; } = new();
+    public class EditVehicleForm
+    {
+        public int VehicleId {get; set;}
+        [Required]
+        public string? LicensePlate { get; set; }
+        [Required]
+        public string? VehicleModel { get; set; }
+        [Required]
+        public Vehicle.CarTypes VehicleCarType { get; set; }
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider
+            .GetAuthenticationStateAsync();
+        username = authState.User.Claims.FirstOrDefault(u => u.Type == ClaimTypes.Name)?.Value;
+        if (!string.IsNullOrEmpty(username))
+        {
+            User_Vehicles = await VehicleService.GetUserVehicles(username);
+        }
+        else
+        {
+            // Handle the case where the username is null or empty
+            User_Vehicles = new List<Vehicle>(); // or any other appropriate action
+        }
+    }
+    private void SwapCreateVehicleView()
+    {  
+        vehicleView = "display:none;";
+        editVehicleView = "display:none;";
+        createVehicleView = "display:block;";
+    }
+    private void SwapVehicleView()
+    {  
+        vehicleView = "display:block;";
+        editVehicleView = "display:none;";
+        createVehicleView = "display:none;";
+    }
+    private async void EditVehicleView(Vehicle vehicle)
+    {  
+        vehicleView = "display:none;";
+        editVehicleView = "display:block;";
+        createVehicleView = "display:none;";
+        Vehicle temp = await VehicleService.GetVehicle(vehicle.LicensePlate);
+        model2.VehicleId = temp.VehicleId;
+        model2.LicensePlate = temp.LicensePlate;
+        model2.VehicleModel = temp.Model;
+        model2.VehicleCarType = temp.CarType;
+        StateHasChanged();
+    }
+    private async void CreateNewVehicle() {
+        Vehicle temp = new Vehicle{
+            User = await UserService.GetUser(username),
+            LicensePlate = model.LicensePlate,
+            Model = model.VehicleModel,
+            CarType = model.VehicleCarType,
+            Deleted = false,
+        };
+        bool success = await VehicleService.CreateVehicle(temp);
+        if (success) {
+            SwapVehicleView();
+            User_Vehicles = await VehicleService.GetUserVehicles(username);
+            Snackbar.Add("Vehicle successfully created", Severity.Success);
+            StateHasChanged();
+        }
+        else {
+            Snackbar.Add("Error creating vehicle", Severity.Error);
+        }
+    }
+    private async void EditVehicle() {
+        Vehicle temp = new Vehicle {
+            VehicleId = model2.VehicleId,
+            User = await UserService.GetUser(username),
+            LicensePlate = model2.LicensePlate,
+            Model = model2.VehicleModel,
+            CarType = model2.VehicleCarType,
+            Deleted = false,
+        };
+        bool success = await VehicleService.UpdateVehicle(temp);
+        if (success) {
+            SwapVehicleView();
+            User_Vehicles = await VehicleService.GetUserVehicles(username);
+            Snackbar.Add("Vehicle successfully edited", Severity.Success);
+            StateHasChanged();
+        }
+        else {
+            Snackbar.Add("Error editing vehicle", Severity.Error);
+        }
+    }
+
+    private async void DeleteVehicle() {
+        bool success = await VehicleService.DeleteVehicle(model2.VehicleId);
+        if (success) {
+            SwapVehicleView();
+            User_Vehicles = await VehicleService.GetUserVehicles(username);
+            Snackbar.Add("Vehicle successfully deleted", Severity.Success);
+            StateHasChanged();
+        }
+        else {
+            Snackbar.Add("Error deleting vehicle", Severity.Error);
+        }
+    }
+}

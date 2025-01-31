@@ -1,0 +1,24 @@
+﻿@using ParkNow.Models
+@inject IBookingService BookingService
+
+<MudDialog>
+    <TitleContent>
+        Are you sure you want to end your parking session now?
+    </TitleContent>
+    <DialogContent>
+        You will be refunded for the remaining session
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Ok</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private MudDialogInstance MudDialog { get; set; }
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(true));
+
+    private void Cancel() => MudDialog.Cancel();
+}

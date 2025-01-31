@@ -1,0 +1,456 @@
+﻿@page "/carparks/{carparkid}"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authorization
+@using ParkNow.Models
+@attribute [Authorize]
+@inject IJSRuntime JSRuntime
+@inject ICarparkService CarparkService
+@inject IVehicleService VehicleService
+@inject IVoucherService VoucherService
+@inject IBookingService BookingService
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ILogger<DynamicCarpark> Logger
+
+<link rel="stylesheet" href="js/leaflet/leaflet.css" />
+<script src="js/leaflet/leaflet.js"></script>
+<style>
+/* Ensures DatePicker popover is centered */
+.mud-popover:has(.mud-picker) {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%,-50%) !important;
+}
+</style>
+
+<div class="mt-8 d-flex justify-center align-center flex-sm-row flex-column flex-grow-1 gap-4">
+    <div class="d-flex justify-center align-center flex-column">
+        <MudText class="mr-2"Typo="Typo.h6">
+            @if (Carpark != null) {
+                @("Carpark: " + carparkid)
+            }
+        </MudText>
+        <MudText class="mr-2"Typo="Typo.h6">
+            @if (Carpark != null) {
+                @Carpark.Address 
+            }
+        </MudText>
+
+        <div id="map" style="height: 325px;width: 325px;"> </div>
+    </div>
+
+    <div style="@bookView" class="mt-md-10">
+        <EditForm FormName="book" Model="@model" OnSubmit="Book">
+            <DataAnnotationsValidator/>
+                <MudCard style="height: 300px;width: 325px;">
+                    <MudCardContent>
+                        <MudSelect @bind-Value="model.Vehicle" Placeholder="Select Vehicle" AdornmentIcon="@Icons.Material.Filled.DirectionsCarFilled" >
+                            @foreach (Vehicle v in Vehicles) {
+                                <MudSelectItem Value="@v.LicensePlate">@v.LicensePlate</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <div class="d-flex justify-center align-center flex-row flex-grow-1 gap-4 mt-3">
+                            <div><MudText Typo="Typo.h6">Start</MudText></div>
+                            <div><MudText Typo="Typo.h6">End</MudText></div>
+                        </div>
+                        <div class="d-flex justify-center align-center flex-row flex-grow-1 gap-4 mt-2">
+                            <MudTimePicker Color="Color.Secondary" Time="@model.StartTime" MinuteSelectionStep="1" OpenTo="OpenTo.Minutes" TimeChanged="@(time => UpdateStartTime(time))"/>
+                            <MudTimePicker Color="Color.Secondary" Time="@model.EndTime" MinuteSelectionStep="1" OpenTo="OpenTo.Minutes" TimeChanged="@(time => UpdateEndTime(time))"/>
+                        </div>
+                        <div class="d-flex justify-center align-center flex-row flex-grow-1 gap-4 mt-4">
+                            <MudDatePicker Color="Color.Secondary" Date="@model.StartDate" DateChanged="@(date => UpdateStartDate(date))"/>
+                            <MudDatePicker Color="Color.Secondary" Date="@model.EndDate" DateChanged="@(date => UpdateEndDate(date))"/>
+                        </div>
+                        <MudSpacer/>
+                        <div><MudText Align="Align.Center" Typo="Typo.h6" class="mt-5">$@price</MudText></div>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudStaticButton FullWidth FormAction="FormAction.Submit" Variant="Variant.Filled" Color="Color.Secondary" Class="mb-2">Next</MudStaticButton>
+                    </MudCardActions>
+                </MudCard>
+        </EditForm>
+    </div>
+    <div style="@payView" class="mt-md-10">
+        <EditForm FormName="book" Model="@model2" OnSubmit="Pay">
+            <DataAnnotationsValidator/>
+            <MudCard style="height: 300px;width: 325px;">
+                <MudCardContent>
+                    <MudTextField @bind-Value="model2.CreditCardNumber"
+                        Mask="@(new PatternMask("0000 0000 0000 0000"))" 
+                        Label="Credit Card Number" 
+                        T="string" 
+                        Variant="@Variant.Text" Clearable />
+                    <MudGrid>
+                        <MudItem xs="6">
+                            <MudTextField @bind-Value="model2.Expiry"
+                                Mask="@(new DateMask("MM/YY", 'Y', 'M'))" 
+                                Label="Expiry" 
+                                T="string" 
+                                Variant="@Variant.Text" />
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudTextField @bind-Value="model2.CSV"
+                                Mask="@(new PatternMask("000"))" 
+                                Label="CVC" 
+                                T="string" 
+                                Variant="@Variant.Text" />
+                        </MudItem>
+                    </MudGrid>
+                    <div class="d-flex align-center justify-center gap-4">
+                        <MudTextField @bind-Value="model2.VoucherId"
+                            Label="Voucher" 
+                            T="string"
+                            TextChanged="OnVoucherIdChanged"/>
+                        @if (isVoucherValid == true)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" 
+                                Color="Color.Success" 
+                                Size="Size.Medium"
+                                Class="ml-2 mt-4"/>
+                        }
+                        else {
+                            <MudIcon Icon="@Icons.Material.Filled.Cancel" 
+                                Color="Color.Error" 
+                                Size="Size.Medium"
+                                Class="ml-2 mt-4"/>
+                        }
+                    </div>
+                    <MudSpacer/>
+                    <div>
+                        @if (price <= 0M) {
+                            <MudText Align="Align.Center" Typo="Typo.h6" class="mt-5">Parking Unavailable</MudText>
+                        }
+                        else {
+                            <MudText Align="Align.Center" Typo="Typo.h6" class="mt-5">$@((price - discount) <= 0 ? "Free" : $"{price - discount}")</MudText>
+                        }
+                    </div>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton FullWidth OnClick="Back" Variant="Variant.Filled" Color="Color.Secondary" Class="mr-2">Back</MudButton>
+                    <MudStaticButton FullWidth FormAction="FormAction.Submit" Variant="Variant.Filled" Color="Color.Secondary" Class="ml-2">Pay</MudStaticButton>
+                </MudCardActions>
+            </MudCard>
+        </EditForm>
+    </div>
+    <div style="@completedView" class="mt-md-10">
+        <MudCard style="height: 300px;width: 325px;">
+            <MudCardContent>
+                <div><MudText Align="Align.Center" Typo="Typo.h6" class="mt-5">Your booking has been confirmed!</MudText></div>
+            </MudCardContent>
+        </MudCard>
+    </div>
+</div>
+
+<script>
+    function initializeMap(lat, long) {
+        var map = L.map('map', {
+            center: [lat,long],
+            zoom: 17
+        });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map); // Added tile layer for map rendering
+        var marker = L.marker([lat,long]).addTo(map);
+    }
+</script>
+
+@code {
+    [Parameter]
+    public required string carparkid { get; set; }
+    public Carpark Carpark = null;
+    private List<Vehicle> Vehicles = new List<Vehicle>();
+    private decimal price = 0;
+    private decimal discount = 0;
+    private string? username;
+    private string bookView = "display:block;";
+    private string payView = "display:none;";
+    private string completedView = "display:none;";
+    private bool isVoucherValid = false;
+
+    [SupplyParameterFromForm]
+    private BookingForm model { get; set; } = new();
+    public class BookingForm
+    {
+        [Required]
+        public string? Carpark { get; set; }
+        [Required]
+        public string? Vehicle { get; set; }
+        public DateTime? StartDate { get; set; }
+
+        public DateTime? EndDate { get; set; }
+        public TimeSpan? StartTime { get; set; }
+
+        public TimeSpan? EndTime { get; set; }
+
+        public DateTime? GetStartDateTime()
+        {
+            return StartDate.HasValue && StartTime.HasValue
+                ? StartDate.Value.Date + StartTime.Value
+                : (DateTime?)null;
+        }
+
+        public DateTime? GetEndDateTime()
+        {
+            return EndDate.HasValue && EndTime.HasValue
+                ? EndDate.Value.Date + EndTime.Value
+                : (DateTime?)null;
+        }
+    }
+
+    [SupplyParameterFromForm]
+    private PaymentForm model2 {get; set;} = new();
+    public class PaymentForm {
+        [Required]
+        public string? CreditCardNumber {get; set;} = string.Empty;
+        [Required]
+        public string? CSV {get; set;} = string.Empty;
+        [Required]
+        public string? Expiry {get; set;} = string.Empty;
+        public string? VoucherId {get; set;}
+    }
+    protected override async Task OnInitializedAsync() {
+        Carpark = await CarparkService.GetCarpark(carparkid);
+
+        var authState = await AuthenticationStateProvider
+            .GetAuthenticationStateAsync();
+        username = authState.User.Claims.FirstOrDefault(u => u.Type == ClaimTypes.Name)?.Value;
+        if (!string.IsNullOrEmpty(username))
+        {
+            Vehicles = await VehicleService.GetUserVehicles(username);
+            model.StartDate = DateTime.Now.AddMinutes(1);
+            model.StartTime = DateTime.Now.TimeOfDay;
+            model.Carpark = carparkid;
+
+            // Prevent Double Booking of Vehicle
+            List<Booking> User_Bookings = await BookingService.GetUserBookings(username);
+            foreach (Booking book in User_Bookings.Where(b => b.Status != Booking.Statuses.Completed)) {
+                Vehicles.Remove(book.Vehicle);
+            }
+        }
+        else
+        {
+            // Handle the case where the username is null or empty
+            Vehicles = new List<Vehicle>();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Carpark != null) // Ensure the map initializes only once
+        {
+            await RenderMap();
+        }
+    }
+
+    private async Task RenderMap() {
+        await JSRuntime.InvokeVoidAsync("initializeMap",Convert.ToDouble(Carpark.XCord),Convert.ToDouble(Carpark.YCord));
+    }
+
+    private void UpdateStartDate(DateTime? date) {
+        model.StartDate = date;
+        UpdatePrice();
+    }
+    private void UpdateEndDate(DateTime? date) {
+        model.EndDate = date;
+        UpdatePrice();
+    }
+    private void UpdateStartTime(TimeSpan? time) {
+        model.StartTime = time;
+        UpdatePrice();
+    }
+    private void UpdateEndTime(TimeSpan? time) {
+        model.EndTime = time;
+        UpdatePrice();
+    }
+
+    private async Task OnVoucherIdChanged() {
+        if (model2.VoucherId != null) {
+            var result = await VoucherService.VerifyVoucher(username, model2.VoucherId);
+            if (result.success) {
+                isVoucherValid = true;
+                discount = result.amount;
+            }
+            else {
+                isVoucherValid = false;
+                discount = 0;
+            }
+        }
+    }
+
+    private void UpdatePrice() {
+        var startDateTime = model.GetStartDateTime();
+        var endDateTime = model.GetEndDateTime();
+
+        if (startDateTime.HasValue && endDateTime.HasValue) // Ensure values are not null
+        {
+            price = BookingService.CalculatePrice(startDateTime.Value, endDateTime.Value, Carpark);
+        }
+    }
+
+    private void Book()
+    {
+        // Validate Booking
+        if (!ValidateBooking())
+        {
+            return;
+        }
+        bookView = "display:none";
+        payView = "display:block";
+    }
+
+    private async Task Pay() {
+        // Validate Payment
+        if (!ValidatePayment())
+        {
+            return;
+        }
+
+        // Add Booking
+        Booking temp = new Booking{
+            User = await UserService.GetUser(username),
+            Carpark = Carpark,
+            Vehicle = await VehicleService.GetVehicle(model.Vehicle),
+            StartTime = model.GetStartDateTime(),
+            EndTime = model.GetEndDateTime(),
+            BookingTime = DateTime.Now,
+            Cost = price,
+            Status = Booking.Statuses.Scheduled
+        };
+
+        // Create New Booking Creates Payment as Well
+        bool createsuccess;
+        if (isVoucherValid) {
+            createsuccess = await BookingService.CreateBooking(temp, await VoucherService.GetVoucher(model2.VoucherId));
+        }
+        else {
+            createsuccess = await BookingService.CreateBooking(temp);
+        }
+        if (createsuccess) {
+            Snackbar.Add("Booking successful!", Severity.Success);
+            bookView = "display:none";
+            payView = "display:none";
+            completedView = "display:block";
+        }
+        else {
+            Snackbar.Add("There is an error with your booking", Severity.Error);
+        }
+    }
+
+    private void Back() {
+        bookView = "display:block";
+        payView = "display:none";
+    }
+
+    private bool ValidateBooking()
+    {
+        var errors = new List<string>();
+
+        if (model.Vehicle == null || string.IsNullOrWhiteSpace(model.Vehicle))
+        {
+            errors.Add("Vehicle is required");
+        }
+
+        var startDateTime = model.GetStartDateTime();
+        var endDateTime = model.GetEndDateTime();
+
+        if (!startDateTime.HasValue)
+        {
+            errors.Add("Start date and time are required");
+        }
+        else if (startDateTime.Value <= DateTime.Now)
+        {
+            errors.Add("Start date and time must be in the future");
+        }
+
+        if (endDateTime == null)
+        {
+            errors.Add("End date and time are required");
+        }
+        else if (endDateTime.Value <= startDateTime.Value)
+        {
+            errors.Add("End date and time must be after the start date and time");
+        }
+        else {
+            if ((endDateTime.Value - startDateTime.Value).TotalDays > 1) {
+                errors.Add("Booking cannot exceed 24 hours");
+            }
+
+            if ((endDateTime.Value - DateTime.Now).TotalDays > 7) {
+                errors.Add("Booking cannot be more than 1 week into the future");
+            }
+        }
+
+
+        if (price <= 0) {
+            errors.Add("Booking is unavailable for this time period");
+        }
+
+        if (errors.Any())
+        {
+            foreach (var error in errors)
+            {
+                Snackbar.Add(error, Severity.Error);
+            }
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ValidatePayment() {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(model2.CreditCardNumber))
+        {
+            errors.Add("Credit Card Number is required");
+        }
+        if (string.IsNullOrWhiteSpace(model2.CSV))
+        {
+            errors.Add("CSV is required");
+        }
+        if (string.IsNullOrWhiteSpace(model2.Expiry))
+        {
+            errors.Add("Credit Card Expiry is required");
+        }
+        else {
+            try {
+                // Remove any whitespace and split by '/'
+                var parts = model2.Expiry.Trim().Split('/');
+                if (parts.Length != 2) return true;
+
+                // Parse month and year
+                if (!int.TryParse(parts[0], out int month) || !int.TryParse(parts[1], out int year))
+                    return true;
+
+                // Add 2000 to convert YY to YYYY
+                year += 2000;
+
+                // Create a date for the last day of the expiry month
+                var expiryDate = new DateTime(year, month, 1).AddMonths(1).AddDays(-1);
+
+                // Compare with current date
+                if(DateTime.Today > expiryDate) {
+                    errors.Add("Credit Card has already expired");
+                }
+            }
+            catch {
+                errors.Add("Credit Card has already expired");
+            }
+        }
+
+        if (errors.Any())
+        {
+            foreach (var error in errors)
+            {
+                Snackbar.Add(error, Severity.Error);
+            }
+            return false;
+        }
+
+        return true;
+    }
+}

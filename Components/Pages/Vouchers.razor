@@ -1,0 +1,277 @@
+﻿@page "/vouchers"
+@using Microsoft.AspNetCore.Authorization;
+@attribute [Authorize(Roles = "Admin")]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IUserService UserService
+@inject IVoucherService VoucherService
+@inject ISnackbar Snackbar
+@inject ILogger<Vouchers> Logger
+<style>
+/* Ensures DatePicker popover is centered */
+.mud-popover:has(.mud-picker) {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%,-50%) !important;
+}
+</style>
+
+<PageTitle>Vouchers</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudPaper>
+        <MudCard Elevation="0">
+            <MudCardHeader>
+                <MudText Typo="Typo.h5">Issue New Voucher</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <EditForm Model="@model" OnSubmit="Issue">
+                    <DataAnnotationsValidator />
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="model.VoucherId"
+                                Label="Voucher ID"
+                                RequiredError="Voucher ID is required!" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="string" Label="Select User" 
+                                    @bind-Value="model.Username">
+                                <MudSelectItem Value="@("all")">All Users</MudSelectItem>
+                                @foreach (var user in All_Users)
+                                {
+                                    <MudSelectItem Value="@user.Username">@user.Username (@user.Email)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudNumericField @bind-Value="model.Amount"
+                                Label="Discount Amount"
+                                Min="0"
+                                Format="N2"
+                                AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                Adornment="Adornment.Start" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudDatePicker @bind-Date="model.Expiry"
+                                Label="Expiry Date"
+                                MinDate="@DateTime.Today"/>
+                        </MudItem>
+                    </MudGrid>
+
+                    <div class="d-flex justify-end mt-4">
+                        <MudButton ButtonType="ButtonType.Submit"
+                            Variant="Variant.Filled"
+                            Color="Color.Primary"
+                            Size="Size.Large"
+                            StartIcon="@Icons.Material.Filled.Add">
+                            Issue Voucher
+                        </MudButton>
+                    </div>
+                </EditForm>
+            </MudCardContent>
+        </MudCard>
+        <MudTable T="Voucher" class="mt-2" Items="@Issued_Vouchers" Height="450px" Hover="true" Breakpoint="Breakpoint.Sm" FixedHeader="true" Virtualize="true" SortLabel="Sort By" Elevation="0" Filter="new Func<Voucher,bool>(FilterFunc)">
+            <ToolBarContent>
+                <div class="d-flex flex-row gap-4 align-center justify-center" style="width: 100%;">
+                    <MudTextField @bind-Value="searchString" 
+                        Placeholder="Search"
+                        Label=" " 
+                        Adornment="Adornment.End" 
+                        AdornmentIcon="@Icons.Material.Filled.Search"
+                        Clearable="true"
+                        IconSize="Size.Medium"/>
+                                            <MudItem xs="12" md="6">
+                            <MudDatePicker Label="From" 
+                                Color="Color.Secondary"
+                                Clearable="true"
+                                DateChanged="OnStartDateRangeChanged"/>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudDatePicker Label="To" 
+                                Color="Color.Secondary"
+                                Clearable="true"
+                                DateChanged="OnEndDateRangeChanged"/>
+                        </MudItem>
+                    <MudSpacer/>
+                </div>
+            </ToolBarContent>
+            <HeaderContent> 
+                <MudTh><MudTableSortLabel SortBy="new Func<Voucher, object>(v=>v.VoucherId)">Id</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Voucher, object>(v=>v.Amount)">Amount</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Voucher, object>(v=>v.Username)">User</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Voucher, object>(v=>v.Issue)">Issue</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<Voucher, object>(v=>v.Expiry)">Expiry</MudTableSortLabel></MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate Context="col">
+                <MudTd DataLabel="Id">@col.VoucherId</MudTd>
+                <MudTd DataLabel="Amount">@col.Amount</MudTd>
+                <MudTd DataLabel="User">@col.Username</MudTd>
+                <MudTd DataLabel="Issue">@col.Issue</MudTd>
+                <MudTd DataLabel="Expiry">@col.Expiry</MudTd>
+                <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                    Color="Color.Error" 
+                    Size="Size.Small"
+                    OnClick="@(()=> DeleteVoucher(col))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private VoucherCreateModel model = new();
+    public string? searchString = ""; 
+    private DateTime? startDateFilter;
+    private DateTime? endDateFilter;
+    private IEnumerable<User> All_Users = new List<User>();
+    private IEnumerable<Voucher> Issued_Vouchers = new List<Voucher>();
+    public class VoucherCreateModel
+    {
+        public string VoucherId { get; set; } = string.Empty;
+        public string Username {get; set;} = null;
+        public decimal Amount { get; set; }
+        public DateTime? Expiry { get; set; }
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        // Get all users
+        All_Users = await UserService.GetAllUsers();
+        await Refresh();
+    }
+    private async Task Refresh() {
+        // Get all vouchers
+        Issued_Vouchers = await VoucherService.GetAllVouchers();
+    }
+    private void OnStartDateRangeChanged(DateTime? date) {
+        startDateFilter = date;
+        // Force table refresh
+        StateHasChanged();
+    }
+    private void OnEndDateRangeChanged(DateTime? date) {
+        endDateFilter = date;
+        // Force table refresh
+        StateHasChanged();
+    }
+    private bool FilterFunc(Voucher v)
+    {
+        // First check the date range
+        bool dateMatch = true;
+        if (startDateFilter.HasValue && endDateFilter.HasValue)
+        {
+            var startDate = startDateFilter.Value.Date;
+            var endDate = endDateFilter.Value.Date;
+            dateMatch = v.Expiry.Date >= startDate && v.Expiry.Date <= endDate;
+        }
+        else if (startDateFilter.HasValue)
+        {
+            dateMatch = v.Expiry.Date >= startDateFilter.Value.Date;
+        }
+        else if (endDateFilter.HasValue)
+        {
+            dateMatch = v.Expiry.Date <= endDateFilter.Value.Date;
+        }
+
+        // Then check the text search
+        bool textMatch = string.IsNullOrWhiteSpace(searchString) || 
+            v.VoucherId.Contains(searchString, StringComparison.OrdinalIgnoreCase) ||
+            (v.Username != null && v.Username.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ||
+            v.Amount.ToString().Contains(searchString, StringComparison.OrdinalIgnoreCase);
+
+        // Item must match both filters
+        return dateMatch && textMatch;
+    }
+    private async Task Issue() {
+        // Validate Issue
+        if (!ValidateIssue())
+        {
+            return;
+        }
+
+        // Create Voucher
+        try
+        {
+            await CreateVoucher();
+            Snackbar.Add("Voucher issued successfully!", Severity.Success);
+
+            // Reset form
+            model = new();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error issuing voucher");
+            Snackbar.Add("Error issuing voucher. Please try again.", Severity.Error);
+        }
+    }
+    private bool ValidateIssue() {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(model.VoucherId))
+        {
+            errors.Add("VoucherId is required");
+        }
+        if (string.IsNullOrWhiteSpace(model.Username)) {
+            errors.Add("Please select target user(s)");
+        }
+        if (model.Amount <= 0) {
+            errors.Add("Amount is required and has to be more than 0");
+        }
+        if (!model.Expiry.HasValue)
+        {
+            errors.Add("Expiry date is required");
+        }
+        else if (model.Expiry.Value <= DateTime.Now)
+        {
+            errors.Add("Expiry date must be in the future");
+        }
+
+        if (errors.Any())
+        {
+            foreach (var error in errors)
+            {
+                Snackbar.Add(error, Severity.Error);
+            }
+            return false;
+        }
+
+        return true;
+    }
+    private async Task CreateVoucher() {   
+        // Issue voucher for all users
+        if (model.Username == "all") {
+            var voucher = new Voucher
+            {
+                VoucherId = model.VoucherId,    
+                Amount = model.Amount,
+                Username = null,
+                User = null,
+                Issue = DateTime.Now,
+                Deleted = false,
+                Expiry = model.Expiry ?? DateTime.Now.AddMonths(1)
+            };
+            await VoucherService.CreateVoucher(voucher);
+        }
+        // Issue voucher for single user
+        else {
+            var voucher = new Voucher
+            {
+                VoucherId = model.VoucherId,
+                Username = model.Username,
+                Amount = model.Amount,
+                Issue = DateTime.Now,
+                Deleted = false,
+                Expiry = model.Expiry ?? DateTime.Now.AddMonths(1)
+            };
+            await VoucherService.CreateVoucher(voucher);
+        }
+        await Refresh();
+        StateHasChanged();
+    }
+    private async Task DeleteVoucher(Voucher v) {
+        await VoucherService.DeleteVoucher(v.VoucherId);
+        await Refresh();
+        StateHasChanged();
+    }
+}
